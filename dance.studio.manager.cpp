@@ -17,15 +17,17 @@ const char* MEMBERSHIPS_FILE = "memberships.dat";
 const char* EVENTS_FILE = "events.dat";
 const char* ABSENCES_FILE = "absences.dat";
 const char* STUDIO_INFO_FILE = "studio_info.dat";
+const char* JOIN_REQUESTS_FILE = "join_requests.dat";
 
 const int MAX_NAME = 64;
-const int MAX_EMAIL = 64;
+const int MAX_PHONE = 100;
 const int MAX_PASSWORD = 32;
 const int MAX_LINK = 160;
 const int MAX_TEXT = 220;
 const int MAX_GROUPS_PER_USER = 12;
 const int MAX_PARTICIPANTS = 80;
 const int MAX_INFO_ITEMS = 20;
+const int MAX_REQUEST_GROUPS = 7;
 
 enum Role {
     ROLE_DANCER = 1,
@@ -51,7 +53,7 @@ enum EventType {
 struct User {
     int id;
     char name[MAX_NAME];
-    char email[MAX_EMAIL];
+    char phone[MAX_PHONE];
     char password[MAX_PASSWORD];
     int role;
     char instagram[MAX_LINK];
@@ -125,6 +127,18 @@ struct StudioInfo {
     int extraInfoCount;
 };
 
+struct JoinRequest {
+    int id;
+    char firstName[MAX_NAME];
+    char lastName[MAX_NAME];
+    int age;
+    char experience[MAX_TEXT];
+    char parentPhone[MAX_PHONE];
+    int groupIds[MAX_REQUEST_GROUPS];
+    int groupCount;
+    bool processed;
+};
+
 class DanceStudioApp {
 private:
     vector<User> users;
@@ -133,8 +147,9 @@ private:
     vector<Membership> memberships;
     vector<Event> events;
     vector<Absence> absences;
+    vector<JoinRequest> joinRequests;
 
-    StudioInfo studioInfo;
+    StudioInfo studioInfo{};
 
     const string studioInstagram = "https://instagram.com/msdancegroup.riga";
     const string studioTikTok = "https://tiktok.com/@msdancegroup.riga";
@@ -147,10 +162,16 @@ public:
 
         while (true) {
             int userIndex = login();
+
             if (userIndex == -1) {
                 saveAll();
                 cout << "Goodbye.\n";
                 return;
+            }
+
+            if (userIndex == -2) {
+                saveAll();
+                continue;
             }
 
             if (users[userIndex].role == ROLE_DANCER) {
@@ -355,6 +376,16 @@ private:
     int nextEventId() const { return maxIdEvents() + 1; }
     int nextAbsenceId() const { return maxIdAbsences() + 1; }
 
+    int nextJoinRequestId() const { return maxIdJoinRequests() + 1; }
+
+    int maxIdJoinRequests() const {
+        int m = 0;
+        for (size_t i = 0; i < joinRequests.size(); ++i) {
+            if (joinRequests[i].id > m) m = joinRequests[i].id;
+        }
+        return m;
+    }
+
     int maxIdUsers() const {
         int m = 0;
         for (size_t i = 0; i < users.size(); ++i) if (users[i].id > m) m = users[i].id;
@@ -400,6 +431,7 @@ private:
         loadEvents();
         loadAbsences();
         loadStudioInfo();
+        loadJoinRequests();
     }
 
     void saveAll() {
@@ -410,6 +442,7 @@ private:
         saveEvents();
         saveAbsences();
         saveStudioInfo();
+        saveJoinRequests();
     }
 
     void loadUsers() {
@@ -532,8 +565,9 @@ private:
         return -1;
     }
 
-    int findUserIdByEmail(const string& email) const {
-        for (size_t i = 0; i < users.size(); ++i) if (email == users[i].email) return users[i].id;
+    int findUserIdByPhone(const string& phone) const {
+        for (size_t i = 0; i < users.size(); ++i)
+            if (phone == users[i].phone) return users[i].id;
         return -1;
     }
 
@@ -592,17 +626,17 @@ private:
     void seedDataIfNeeded() {
         if (!users.empty() || !groups.empty()) return;
 
-        int elizavetaId = addUserRecord("Elizaveta", "elizaveta@studio.com", "1234", ROLE_COACH,
+        int elizavetaId = addUserRecord("Elizaveta", "00000000", "1234", ROLE_COACH,
             "https://instagram.com/elizaveta_placeholder");
-        int kamilaId = addUserRecord("Kamila", "kamila@studio.com", "1234", ROLE_COACH,
+        int kamilaId = addUserRecord("Kamila", "11111111", "1234", ROLE_COACH,
             "https://instagram.com/kamila_placeholder");
-        int patriciaId = addUserRecord("Patricia", "patricia@studio.com", "1234", ROLE_COACH,
+        int patriciaId = addUserRecord("Patricia", "22222222", "1234", ROLE_COACH,
             "https://instagram.com/patricia_placeholder");
-        int anastasiaId = addUserRecord("Anastasia", "anastasia@studio.com", "1234", ROLE_COACH,
+        int anastasiaId = addUserRecord("Anastasia", "33333333", "1234", ROLE_COACH,
             "https://instagram.com/anastasia_placeholder");
-        int mariaId = addUserRecord("Maria", "maria@studio.com", "1234", ROLE_ADMIN,
+        int mariaId = addUserRecord("Maria", "44444444", "1234", ROLE_ADMIN,
             "https://instagram.com/maria_placeholder");
-        int dancerId = addUserRecord("Demo Dancer", "dancer@studio.com", "1234", ROLE_DANCER, "");
+        int dancerId = addUserRecord("Demo Dancer", "67676767", "1234", ROLE_DANCER, "");
 
         int jazzOpenId = addGroupRecord("Jazz Open", mariaId, 14,
             "Open jazz group, age recommendation 10+.",
@@ -699,11 +733,11 @@ private:
         saveAll();
     }
 
-    int addUserRecord(const string& name, const string& email, const string& password, int role, const string& instagram) {
+    int addUserRecord(const string& name, const string& phone, const string& password, int role, const string& instagram) {
         User u;
         u.id = nextUserId();
         copyText(u.name, MAX_NAME, name);
-        copyText(u.email, MAX_EMAIL, email);
+        copyText(u.phone, MAX_PHONE, phone);
         copyText(u.password, MAX_PASSWORD, password);
         u.role = role;
         copyText(u.instagram, MAX_LINK, instagram);
@@ -778,26 +812,148 @@ private:
     int login() {
         cout << "\n=== DANCE STUDIO MANAGEMENT SYSTEM ===\n";
         cout << "1. Login\n";
+        cout << "2. Register\n";
         cout << "0. Exit\n";
         cout << "Choose: ";
         int choice = readInt();
 
         if (choice == 0) return -1;
+        if (choice == 2) {
+            registerDancer();
+            return -2;
+        }
         if (choice != 1) return -1;
 
-        string email = readLine("Email: ");
+        string phone = readLine("Phone: ");
         string password = readLine("Password: ");
 
         for (size_t i = 0; i < users.size(); ++i) {
-            if (email == users[i].email && password == users[i].password) {
+            if (phone == users[i].phone && password == users[i].password) {
                 cout << "\nWelcome, " << users[i].name
                     << " (" << roleToString(users[i].role) << ").\n";
                 return static_cast<int>(i);
             }
         }
 
-        cout << "Invalid email or password.\n";
+        cout << "Invalid phone or password.\n";
         return -1;
+    }
+
+    // ---------- registration ----------
+    void registerDancer() {
+        cout << "\n=== REGISTRATION ===\n";
+
+        string phone = readLine("Phone: ");
+        string password = readLine("Password: ");
+
+        if (findUserIdByPhone(phone) != -1) {
+            cout << "A user with this phone already exists.\n";
+            return;
+        }
+
+        JoinRequest r{};
+        r.id = nextJoinRequestId();
+
+        string first = readLine("First name: ");
+        string last = readLine("Last name: ");
+
+        copyText(r.firstName, MAX_NAME, first);
+        copyText(r.lastName, MAX_NAME, last);
+
+        cout << "Age: ";
+        r.age = readInt();
+
+        string exp = readLine("Experience: ");
+        copyText(r.experience, MAX_TEXT, exp);
+
+        if (r.age < 18) {
+            string parentPhone = readLine("Parent phone: ");
+            copyText(r.parentPhone, MAX_PHONE, parentPhone);
+        }
+        else {
+            copyText(r.parentPhone, MAX_PHONE, "");
+        }
+
+        showGroups();
+        cout << "How many groups do you want to apply for? ";
+        int count = readInt();
+        if (count > MAX_REQUEST_GROUPS) count = MAX_REQUEST_GROUPS;
+        if (count < 0) count = 0;
+
+        r.groupCount = count;
+        for (int i = 0; i < count; ++i) {
+            cout << "Enter group ID #" << (i + 1) << ": ";
+            r.groupIds[i] = readInt();
+        }
+
+        r.processed = false;
+        joinRequests.push_back(r);
+
+        string fullName = first + " " + last;
+        int id = addUserRecord(fullName, phone, password, ROLE_DANCER, "");
+
+        cout << "Registration complete.\n";
+        cout << "Your account was created with ID " << id << ".\n";
+        cout << "Your join request was submitted.\n";
+    }
+
+    void createJoinRequest(const string& firstName, const string& lastName) {
+        JoinRequest request{};
+        request.id = nextJoinRequestId();
+
+        copyText(request.firstName, MAX_NAME, firstName);
+        copyText(request.lastName, MAX_NAME, lastName);
+
+        cout << "Age: ";
+        request.age = readInt();
+
+        string experience = readLine("Dance experience: ");
+        copyText(request.experience, MAX_TEXT, experience);
+
+        if (request.age < 18) {
+            string parentPhone = readLine("Parent phone number: ");
+            copyText(request.parentPhone, MAX_PHONE, parentPhone);
+        }
+        else {
+            copyText(request.parentPhone, MAX_PHONE, "");
+        }
+
+        showGroups();
+        cout << "How many groups do you want to apply for? ";
+        int count = readInt();
+        if (count > MAX_REQUEST_GROUPS) count = MAX_REQUEST_GROUPS;
+        if (count < 0) count = 0;
+
+        request.groupCount = count;
+        for (int i = 0; i < count; ++i) {
+            cout << "Enter group ID #" << (i + 1) << ": ";
+            request.groupIds[i] = readInt();
+        }
+
+        request.processed = false;
+        joinRequests.push_back(request);
+
+        cout << "Join request submitted.\n";
+    }
+
+    void loadJoinRequests() {
+        joinRequests.clear();
+        ifstream file(JOIN_REQUESTS_FILE, ios::binary);
+        if (!file.is_open()) return;
+
+        JoinRequest item;
+        while (file.read(reinterpret_cast<char*>(&item), sizeof(JoinRequest))) {
+            joinRequests.push_back(item);
+        }
+        file.close();
+    }
+
+    void saveJoinRequests() {
+        ofstream file(JOIN_REQUESTS_FILE, ios::binary | ios::trunc);
+        for (size_t i = 0; i < joinRequests.size(); ++i) {
+            file.write(reinterpret_cast<const char*>(&joinRequests[i]), sizeof(JoinRequest));
+        }
+        file.close();
     }
 
     // ---------- menus ----------
@@ -854,38 +1010,37 @@ private:
 
     void adminMenu(int userIndex) {
         while (true) {
-            cout << "\n=== ADMIN MENU ===\n";
             cout << "1. Show all users\n";
-            cout << "2. Add dancer\n";
-            cout << "3. Add coach\n";
-            cout << "4. Add group\n";
-            cout << "5. Assign dancer to group\n";
-            cout << "6. Add session\n";
-            cout << "7. Add event\n";
-            cout << "8. Assign user to event\n";
-            cout << "9. Activate membership\n";
-            cout << "10. Show all memberships\n";
-            cout << "11. Show all sessions\n";
-            cout << "12. Show studio info links\n";
-            cout << "13. Edit studio info links\n";
+            cout << "2. Add coach\n";
+            cout << "3. Add group\n";
+            cout << "4. Assign dancer to group\n";
+            cout << "5. Add session\n";
+            cout << "6. Add event\n";
+            cout << "7. Assign user to event\n";
+            cout << "8. Activate membership\n";
+            cout << "9. Show all memberships\n";
+            cout << "10. Show all sessions\n";
+            cout << "11. Show studio info links\n";
+            cout << "12. Edit studio info links\n";
+            cout << "13. Show join requests\n";
             cout << "0. Logout\n";
             cout << "Choose: ";
 
             int choice = readInt();
             switch (choice) {
             case 1: showAllUsers(); break;
-            case 2: addUserInteractive(ROLE_DANCER); break;
-            case 3: addUserInteractive(ROLE_COACH); break;
-            case 4: addGroupInteractive(); break;
-            case 5: assignDancerToGroupInteractive(); break;
-            case 6: addSessionInteractive(); break;
-            case 7: addEventInteractive(); break;
-            case 8: assignUserToEventInteractive(); break;
-            case 9: activateMembershipInteractive(); break;
-            case 10: showAllMemberships(); break;
-            case 11: showAllSessions(); break;
-            case 12: showInfoSection(); break;
-            case 13: editStudioInfo(); break;
+            case 2: addUserInteractive(ROLE_COACH); break;
+            case 3: addGroupInteractive(); break;
+            case 4: assignDancerToGroupInteractive(); break;
+            case 5: addSessionInteractive(); break;
+            case 6: addEventInteractive(); break;
+            case 7: assignUserToEventInteractive(); break;
+            case 8: activateMembershipInteractive(); break;
+            case 9: showAllMemberships(); break;
+            case 10: showAllSessions(); break;
+            case 11: showInfoSection(); break;
+            case 12: editStudioInfo(); break;
+            case 13: showJoinRequests(); break;
             case 0: saveAll(); return;
             default: cout << "Invalid choice.\n";
             }
@@ -902,7 +1057,7 @@ private:
         cout << left
             << setw(5) << "ID"
             << setw(22) << "Name"
-            << setw(28) << "Email"
+            << setw(28) << "Phone"
             << setw(12) << "Role"
             << "Instagram\n";
         cout << string(95, '-') << "\n";
@@ -911,7 +1066,7 @@ private:
             cout << left
                 << setw(5) << users[i].id
                 << setw(22) << users[i].name
-                << setw(28) << users[i].email
+                << setw(28) << users[i].phone
                 << setw(12) << roleToString(users[i].role)
                 << users[i].instagram << "\n";
         }
@@ -1106,14 +1261,17 @@ private:
         cout << "Studio Instagram: " << studioInfo.studioInstagram << "\n";
         cout << "Studio TikTok: " << studioInfo.studioTikTok << "\n\n";
 
-        cout << "Coach Instagram links:\n";
-        if (studioInfo.coachInstagramCount == 0) {
-            cout << "No coach Instagram links added.\n";
-        }
-        else {
-            for (int i = 0; i < studioInfo.coachInstagramCount; ++i) {
-                cout << i + 1 << ". " << studioInfo.coachInstagramLinks[i] << "\n";
+        cout << "Coach and admin Instagram links:\n";
+        bool foundLinks = false;
+        for (size_t i = 0; i < users.size(); ++i) {
+            if ((users[i].role == ROLE_COACH || users[i].role == ROLE_ADMIN) &&
+                strlen(users[i].instagram) > 0) {
+                foundLinks = true;
+                cout << "- " << users[i].name << ": " << users[i].instagram << "\n";
             }
+        }
+        if (!foundLinks) {
+            cout << "No coach or admin Instagram links found.\n";
         }
 
         cout << "\nCompetition photo links:\n";
@@ -1459,18 +1617,51 @@ private:
     }
 
     // ---------- admin actions ----------
+    void showJoinRequests() {
+        cout << "\n=== JOIN REQUESTS ===\n";
+
+        bool found = false;
+        for (size_t i = 0; i < joinRequests.size(); ++i) {
+            if (joinRequests[i].processed) continue;
+
+            found = true;
+            cout << "Request ID: " << joinRequests[i].id << "\n";
+            cout << "Name: " << joinRequests[i].firstName << " " << joinRequests[i].lastName << "\n";
+            cout << "Age: " << joinRequests[i].age << "\n";
+            cout << "Experience: " << joinRequests[i].experience << "\n";
+
+            if (strlen(joinRequests[i].parentPhone) > 0) {
+                cout << "Parent phone: " << joinRequests[i].parentPhone << "\n";
+            }
+
+            cout << "Requested groups:\n";
+            for (int j = 0; j < joinRequests[i].groupCount; ++j) {
+                int gi = findGroupIndexById(joinRequests[i].groupIds[j]);
+                if (gi != -1) {
+                    cout << "- " << groups[gi].name << "\n";
+                }
+            }
+
+            cout << "-----------------------------\n";
+        }
+
+        if (!found) {
+            cout << "No pending join requests.\n";
+        }
+    }
+
     void addUserInteractive(int role) {
         string name = readLine("Name: ");
-        string email = readLine("Email: ");
+        string phone = readLine("Phone: ");
         string password = readLine("Password: ");
         string instagram = readLine("Instagram link (or leave empty): ");
 
-        if (findUserIdByEmail(email) != -1) {
-            cout << "A user with this email already exists.\n";
+        if (findUserIdByPhone(phone) != -1) {
+            cout << "A user with this phone already exists.\n";
             return;
         }
 
-        int id = addUserRecord(name, email, password, role, instagram);
+        int id = addUserRecord(name, phone, password, role, instagram);
         cout << "User added with ID " << id << ".\n";
     }
 
@@ -1629,7 +1820,7 @@ private:
             if (users[i].role == role) {
                 cout << "ID: " << users[i].id
                     << " | Name: " << users[i].name
-                    << " | Email: " << users[i].email << "\n";
+                    << " | Phone: " << users[i].phone << "\n";
             }
         }
     }
@@ -1651,9 +1842,8 @@ private:
             cout << "2. Edit studio rules\n";
             cout << "3. Edit studio Instagram link\n";
             cout << "4. Edit studio TikTok link\n";
-            cout << "5. Add coach Instagram link\n";
-            cout << "6. Add competition photo link\n";
-            cout << "7. Add extra info link\n";
+            cout << "5. Add competition photo link\n";
+            cout << "6. Add extra info link\n";
             cout << "0. Back\n";
             cout << "Choose: ";
 
@@ -1662,11 +1852,17 @@ private:
             if (choice == 0) return;
 
             if (choice == 1) {
+                cout << "\nCurrent studio description:\n";
+                cout << studioInfo.studioDescription << "\n\n";
+
                 string text = readLine("New studio description: ");
                 copyText(studioInfo.studioDescription, MAX_TEXT, text);
                 cout << "Studio description updated.\n";
             }
             else if (choice == 2) {
+                cout << "\nCurrent studio rules:\n";
+                cout << studioInfo.rules << "\n\n";
+
                 string text = readLine("New studio rules: ");
                 copyText(studioInfo.rules, MAX_TEXT, text);
                 cout << "Studio rules updated.\n";
@@ -1682,17 +1878,6 @@ private:
                 cout << "Studio TikTok updated.\n";
             }
             else if (choice == 5) {
-                if (studioInfo.coachInstagramCount >= MAX_INFO_ITEMS) {
-                    cout << "Coach Instagram link list is full.\n";
-                }
-                else {
-                    string text = readLine("Coach Instagram link: ");
-                    copyText(studioInfo.coachInstagramLinks[studioInfo.coachInstagramCount], MAX_LINK, text);
-                    studioInfo.coachInstagramCount++;
-                    cout << "Coach Instagram link added.\n";
-                }
-            }
-            else if (choice == 6) {
                 if (studioInfo.competitionPhotoCount >= MAX_INFO_ITEMS) {
                     cout << "Competition photo link list is full.\n";
                 }
@@ -1703,7 +1888,7 @@ private:
                     cout << "Competition photo link added.\n";
                 }
             }
-            else if (choice == 7) {
+            else if (choice == 6) {
                 if (studioInfo.extraInfoCount >= MAX_INFO_ITEMS) {
                     cout << "Extra info link list is full.\n";
                 }
