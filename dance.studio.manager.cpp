@@ -27,7 +27,7 @@ const int MAX_TEXT = 220;
 const int MAX_GROUPS_PER_USER = 12;
 const int MAX_PARTICIPANTS = 80;
 const int MAX_INFO_ITEMS = 20;
-const int MAX_REQUEST_GROUPS = 7;
+const int MAX_REQUEST_GROUPS = 10;
 
 enum Role {
     ROLE_DANCER = 1,
@@ -56,6 +56,7 @@ struct User {
     char phone[MAX_PHONE];
     char password[MAX_PASSWORD];
     int role;
+    int status;
     char instagram[MAX_LINK];
     int groupIds[MAX_GROUPS_PER_USER];
     int groupCount;
@@ -73,9 +74,11 @@ struct Group {
 struct Session {
     int id;
     int groupId;
-    int date;      // YYYYMMDD
-    int time;      // HHMM
+    int date;          // YYYYMMDD (optional; 0 when using recurring weekly schedule)
+    int dayOfWeek;     // 1 Monday ... 7 Sunday
+    int time;          // HHMM
     int durationMin;
+    bool recurring;    // true for weekly schedule
     bool cancelled;
     char note[MAX_TEXT];
 };
@@ -119,6 +122,16 @@ struct StudioInfo {
     char rules[MAX_TEXT];
     char studioInstagram[MAX_LINK];
     char studioTikTok[MAX_LINK];
+
+    char contemporaryInfo[MAX_TEXT];
+    char heelsInfo[MAX_TEXT];
+    char jazzFunkInfo[MAX_TEXT];
+    char jazzOpenInfo[MAX_TEXT];
+    char ladyStyleInfo[MAX_TEXT];
+    char showGroupInfo[MAX_TEXT];
+    char stretchingInfo[MAX_TEXT];
+    char softStretchingInfo[MAX_TEXT];
+
     char coachInstagramLinks[MAX_INFO_ITEMS][MAX_LINK];
     char competitionPhotoLinks[MAX_INFO_ITEMS][MAX_LINK];
     char extraInfoLinks[MAX_INFO_ITEMS][MAX_LINK];
@@ -134,6 +147,8 @@ struct JoinRequest {
     int age;
     char experience[MAX_TEXT];
     char parentPhone[MAX_PHONE];
+    char phone[MAX_PHONE];
+    char password[MAX_PASSWORD];
     int groupIds[MAX_REQUEST_GROUPS];
     int groupCount;
     bool processed;
@@ -174,13 +189,17 @@ public:
                 continue;
             }
 
+            if (userIndex == -3) {
+                continue;
+            }
+
             if (users[userIndex].role == ROLE_DANCER) {
                 dancerMenu(userIndex);
             }
             else if (users[userIndex].role == ROLE_COACH) {
                 coachMenu(userIndex);
             }
-            else {
+            else if (users[userIndex].role == ROLE_ADMIN) {
                 adminMenu(userIndex);
             }
         }
@@ -239,6 +258,24 @@ private:
         }
     }
 
+    static int getCurrentDate() {
+        time_t now = time(0);
+        tm localNow;
+        localtime_s(&localNow, &now);
+
+        return (localNow.tm_year + 1900) * 10000
+            + (localNow.tm_mon + 1) * 100
+            + localNow.tm_mday;
+    }
+
+    static int getCurrentTimeHHMM() {
+        time_t now = time(0);
+        tm localNow;
+        localtime_s(&localNow, &now);
+
+        return localNow.tm_hour * 100 + localNow.tm_min;
+    }
+
     static time_t toTimeValue(int date, int time) {
         int year = date / 10000;
         int month = (date / 100) % 100;
@@ -288,6 +325,19 @@ private:
         tm tmValue;
         localtime_s(&tmValue, &base);
         return (tmValue.tm_year + 1900) * 10000 + (tmValue.tm_mon + 1) * 100 + tmValue.tm_mday;
+    }
+
+    static const char* dayOfWeekToString(int day) {
+        switch (day) {
+        case 1: return "Monday";
+        case 2: return "Tuesday";
+        case 3: return "Wednesday";
+        case 4: return "Thursday";
+        case 5: return "Friday";
+        case 6: return "Saturday";
+        case 7: return "Sunday";
+        default: return "Unknown";
+        }
     }
 
     static int nextMonthFirstDay(int date) {
@@ -626,6 +676,23 @@ private:
     void seedDataIfNeeded() {
         if (!users.empty() || !groups.empty()) return;
 
+        copyText(studioInfo.contemporaryInfo, MAX_TEXT,
+            "Contemporary (12+): soft, fluid, expressive dance based on technique and control.");
+        copyText(studioInfo.heelsInfo, MAX_TEXT,
+            "Heels (16+): confidence, posture, femininity, balance and control.");
+        copyText(studioInfo.jazzFunkInfo, MAX_TEXT,
+            "Jazz Funk (12+): energy, rhythm, coordination, sharp accents and stage presence.");
+        copyText(studioInfo.jazzOpenInfo, MAX_TEXT,
+            "Jazz Open (14+): freedom inside structure, technique, musicality, jumps and turns.");
+        copyText(studioInfo.ladyStyleInfo, MAX_TEXT,
+            "Lady Style (30+): feminine energy, expression, softness, strength and character.");
+        copyText(studioInfo.showGroupInfo, MAX_TEXT,
+            "Show Group (15+, casting): studio performance team for experienced selected dancers.");
+        copyText(studioInfo.stretchingInfo, MAX_TEXT,
+            "Stretching & Acrobatics: flexibility, strength and body control.");
+        copyText(studioInfo.softStretchingInfo, MAX_TEXT,
+            "Soft Stretching: gentle flexibility and recovery class.");
+
         int elizavetaId = addUserRecord("Elizaveta", "00000000", "1234", ROLE_COACH,
             "https://instagram.com/elizaveta_placeholder");
         int kamilaId = addUserRecord("Kamila", "11111111", "1234", ROLE_COACH,
@@ -681,19 +748,19 @@ private:
         assignUserToGroup(dancerId, jazzFunkBegId);
         assignUserToGroup(dancerId, stretchId);
 
-        addSessionRecord(jazzFunkBegId, 20250908, 1800, 60, "Regular class");
-        addSessionRecord(stretchId, 20250909, 1900, 60, "Regular class");
-        addSessionRecord(heelsBegId, 20250910, 1900, 60, "Regular class");
-        addSessionRecord(jazzOpenId, 20250911, 1800, 60, "Regular class");
-        addSessionRecord(showGroupId, 20250912, 2000, 90, "Regular class");
-        addSessionRecord(ladyStyleId, 20250915, 1900, 60, "Regular class");
-        addSessionRecord(contempTechniqueId, 20250916, 1800, 60, "Regular class");
-        addSessionRecord(heelsAdvId, 20250917, 2000, 60, "Regular class");
-        addSessionRecord(contempBegId, 20250918, 1800, 60, "Regular class");
-        addSessionRecord(contempIntId, 20250919, 1900, 60, "Regular class");
-        addSessionRecord(contempAdultsId, 20250920, 1930, 60, "Regular class");
-        addSessionRecord(softStretchId, 20250921, 1800, 60, "Regular class");
-        addSessionRecord(jazzFunkIntId, 20250922, 1900, 60, "Regular class");
+        addSessionRecord(jazzFunkBegId, 4, 1700, 60, "Regular class", true);       // Thursday
+        addSessionRecord(stretchId, 5, 1700, 60, "Regular class", true);           // Friday
+        addSessionRecord(heelsBegId, 1, 1900, 60, "Regular class", true);          // Monday
+        addSessionRecord(jazzOpenId, 2, 1800, 60, "Regular class", true);          // Tuesday
+        addSessionRecord(showGroupId, 1, 2000, 90, "Regular class", true);         // Monday
+        addSessionRecord(ladyStyleId, 2, 1900, 60, "Regular class", true);         // Tuesday
+        addSessionRecord(contempTechniqueId, 1, 1800, 60, "Regular class", true);  // Monday
+        addSessionRecord(heelsAdvId, 2, 2000, 60, "Regular class", true);          // Tuesday
+        addSessionRecord(contempBegId, 3, 1700, 60, "Regular class", true);        // Wednesday
+        addSessionRecord(contempIntId, 3, 1800, 60, "Regular class", true);        // Wednesday
+        addSessionRecord(contempAdultsId, 3, 1930, 60, "Regular class", true);     // Wednesday
+        addSessionRecord(softStretchId, 6, 1000, 60, "Regular class", true);       // Saturday
+        addSessionRecord(jazzFunkIntId, 4, 1800, 60, "Regular class", true);       // Thursday
 
         int concertId = addEventRecord(EVENT_CONCERT, "Reporting Concert", 20260530, 1800,
             "Main end-of-season show.");
@@ -760,13 +827,15 @@ private:
         return g.id;
     }
 
-    int addSessionRecord(int groupId, int date, int time, int durationMin, const string& note) {
+    int addSessionRecord(int groupId, int dayOfWeek, int time, int durationMin, const string& note, bool recurring = true) {
         Session s;
         s.id = nextSessionId();
         s.groupId = groupId;
-        s.date = date;
+        s.date = 0; // no specific date for recurring sessions
+        s.dayOfWeek = dayOfWeek;
         s.time = time;
         s.durationMin = durationMin;
+        s.recurring = recurring;
         s.cancelled = false;
         copyText(s.note, MAX_TEXT, note);
         sessions.push_back(s);
@@ -810,33 +879,64 @@ private:
 
     // ---------- login ----------
     int login() {
-        cout << "\n=== DANCE STUDIO MANAGEMENT SYSTEM ===\n";
-        cout << "1. Login\n";
-        cout << "2. Register\n";
-        cout << "0. Exit\n";
-        cout << "Choose: ";
-        int choice = readInt();
+        while (true) {
+            cout << "\n=== DANCE STUDIO MANAGEMENT SYSTEM ===\n";
+            cout << "1. Login\n";
+            cout << "2. Register\n";
+            cout << "0. Exit\n";
+            cout << "Choose: ";
 
-        if (choice == 0) return -1;
-        if (choice == 2) {
-            registerDancer();
-            return -2;
-        }
-        if (choice != 1) return -1;
+            int choice = readInt();
 
-        string phone = readLine("Phone: ");
-        string password = readLine("Password: ");
+            if (choice == 0) {
+                return -1;
+            }
 
-        for (size_t i = 0; i < users.size(); ++i) {
-            if (phone == users[i].phone && password == users[i].password) {
-                cout << "\nWelcome, " << users[i].name
-                    << " (" << roleToString(users[i].role) << ").\n";
-                return static_cast<int>(i);
+            if (choice == 2) {
+                registerDancer();
+                continue;
+            }
+
+            if (choice != 1) {
+                cout << "Invalid choice.\n";
+                continue;
+            }
+
+            string phone = readLine("Phone: ");
+            string password = readLine("Password: ");
+
+            bool phoneFound = false;
+
+            for (size_t i = 0; i < users.size(); ++i) {
+                if (phone == users[i].phone) {
+                    phoneFound = true;
+
+                    if (users[i].status == 0) {
+                        cout << "Your registration is waiting for admin approval.\n";
+                        return -3;
+                    }
+
+                    if (users[i].status == 2) {
+                        cout << "Your registration was rejected.\n";
+                        return -3;
+                    }
+
+                    if (password != users[i].password) {
+                        cout << "Invalid phone or password.\n";
+                        return -3;
+                    }
+
+                    cout << "\nWelcome, " << users[i].name
+                        << " (" << roleToString(users[i].role) << ").\n";
+
+                    return static_cast<int>(i);
+                }
+            }
+
+            if (!phoneFound) {
+                cout << "Invalid phone or password.\n";
             }
         }
-
-        cout << "Invalid phone or password.\n";
-        return -1;
     }
 
     // ---------- registration ----------
@@ -851,89 +951,76 @@ private:
             return;
         }
 
-        JoinRequest r{};
-        r.id = nextJoinRequestId();
-
         string first = readLine("First name: ");
         string last = readLine("Last name: ");
 
-        copyText(r.firstName, MAX_NAME, first);
-        copyText(r.lastName, MAX_NAME, last);
-
         cout << "Age: ";
-        r.age = readInt();
+        int age = readInt();
 
         string exp = readLine("Experience: ");
-        copyText(r.experience, MAX_TEXT, exp);
 
-        if (r.age < 18) {
-            string parentPhone = readLine("Parent phone: ");
-            copyText(r.parentPhone, MAX_PHONE, parentPhone);
-        }
-        else {
-            copyText(r.parentPhone, MAX_PHONE, "");
+        string parentPhone = "";
+        if (age < 18) {
+            parentPhone = readLine("Parent phone: ");
         }
 
+        vector<int> selectedGroups;
+
+        cout << "\nAvailable groups:\n";
         showGroups();
-        cout << "How many groups do you want to apply for? ";
-        int count = readInt();
-        if (count > MAX_REQUEST_GROUPS) count = MAX_REQUEST_GROUPS;
-        if (count < 0) count = 0;
 
-        r.groupCount = count;
+        cout << "How many groups do you want to request? ";
+        int count = readInt();
+
         for (int i = 0; i < count; ++i) {
-            cout << "Enter group ID #" << (i + 1) << ": ";
-            r.groupIds[i] = readInt();
+            cout << "Enter group ID: ";
+            int groupId = readInt();
+
+            if (findGroupIndexById(groupId) == -1) {
+                cout << "Group not found.\n";
+                --i;
+                continue;
+            }
+
+            selectedGroups.push_back(groupId);
+        }
+
+        User u;
+        u.id = nextUserId();
+        copyText(u.name, MAX_NAME, first + " " + last);
+        copyText(u.phone, MAX_PHONE, phone);
+        copyText(u.password, MAX_PASSWORD, password);
+        u.role = ROLE_DANCER;
+        u.status = 0;
+        copyText(u.instagram, MAX_LINK, "");
+        u.groupCount = 0;
+
+        for (int i = 0; i < MAX_GROUPS_PER_USER; ++i) {
+            u.groupIds[i] = 0;
+        }
+
+        users.push_back(u);
+
+        JoinRequest r{};
+        r.id = nextJoinRequestId();
+        copyText(r.firstName, MAX_NAME, first);
+        copyText(r.lastName, MAX_NAME, last);
+        r.age = age;
+        copyText(r.experience, MAX_TEXT, exp);
+        copyText(r.parentPhone, MAX_PHONE, parentPhone);
+        copyText(r.phone, MAX_PHONE, phone);
+        copyText(r.password, MAX_PASSWORD, password);
+
+        r.groupCount = static_cast<int>(selectedGroups.size());
+        for (int i = 0; i < r.groupCount; ++i) {
+            r.groupIds[i] = selectedGroups[i];
         }
 
         r.processed = false;
+
         joinRequests.push_back(r);
 
-        string fullName = first + " " + last;
-        int id = addUserRecord(fullName, phone, password, ROLE_DANCER, "");
-
-        cout << "Registration complete.\n";
-        cout << "Your account was created with ID " << id << ".\n";
-        cout << "Your join request was submitted.\n";
-    }
-
-    void createJoinRequest(const string& firstName, const string& lastName) {
-        JoinRequest request{};
-        request.id = nextJoinRequestId();
-
-        copyText(request.firstName, MAX_NAME, firstName);
-        copyText(request.lastName, MAX_NAME, lastName);
-
-        cout << "Age: ";
-        request.age = readInt();
-
-        string experience = readLine("Dance experience: ");
-        copyText(request.experience, MAX_TEXT, experience);
-
-        if (request.age < 18) {
-            string parentPhone = readLine("Parent phone number: ");
-            copyText(request.parentPhone, MAX_PHONE, parentPhone);
-        }
-        else {
-            copyText(request.parentPhone, MAX_PHONE, "");
-        }
-
-        showGroups();
-        cout << "How many groups do you want to apply for? ";
-        int count = readInt();
-        if (count > MAX_REQUEST_GROUPS) count = MAX_REQUEST_GROUPS;
-        if (count < 0) count = 0;
-
-        request.groupCount = count;
-        for (int i = 0; i < count; ++i) {
-            cout << "Enter group ID #" << (i + 1) << ": ";
-            request.groupIds[i] = readInt();
-        }
-
-        request.processed = false;
-        joinRequests.push_back(request);
-
-        cout << "Join request submitted.\n";
+        cout << "Registration submitted. Wait for admin approval.\n";
     }
 
     void loadJoinRequests() {
@@ -965,7 +1052,10 @@ private:
             cout << "3. My groups\n";
             cout << "4. Membership section\n";
             cout << "5. Submit absence\n";
-            cout << "6. Info section\n";
+            cout << "6. Studio info\n";
+            cout << "7. Styles info\n";
+            cout << "8. Weekly schedule\n";
+            cout << "9. Join group request\n";
             cout << "0. Logout\n";
             cout << "Choose: ";
 
@@ -977,6 +1067,9 @@ private:
             case 4: membershipMenuForDancer(userIndex); break;
             case 5: submitAbsence(userIndex); break;
             case 6: showInfoSection(); break;
+            case 7: showFullStylesInfo(); break;
+            case 8: showWeeklyScheduleInfo(); break;
+            case 9: submitJoinRequest(userIndex); break;
             case 0: saveAll(); return;
             default: cout << "Invalid choice.\n";
             }
@@ -1010,38 +1103,157 @@ private:
 
     void adminMenu(int userIndex) {
         while (true) {
-            cout << "1. Show all users\n";
-            cout << "2. Add coach\n";
-            cout << "3. Add group\n";
-            cout << "4. Assign dancer to group\n";
-            cout << "5. Add session\n";
-            cout << "6. Add event\n";
-            cout << "7. Assign user to event\n";
-            cout << "8. Activate membership\n";
-            cout << "9. Show all memberships\n";
-            cout << "10. Show all sessions\n";
-            cout << "11. Show studio info links\n";
-            cout << "12. Edit studio info links\n";
-            cout << "13. Show join requests\n";
+            cout << "\n=== ADMIN MENU ===\n";
+            cout << "1. Users\n";
+            cout << "2. Groups\n";
+            cout << "3. Sessions and events\n";
+            cout << "4. Memberships\n";
+            cout << "5. Studio info\n";
+            cout << "6. Join requests\n";
+            cout << "7. Schedule\n";
+            cout << "8. Coach actions\n";
             cout << "0. Logout\n";
             cout << "Choose: ";
 
             int choice = readInt();
+
+            switch (choice) {
+            case 1: adminUsersMenu(); break;
+            case 2: adminGroupsMenu(); break;
+            case 3: adminSessionsEventsMenu(); break;
+            case 4: adminMembershipsMenu(); break;
+            case 5: adminStudioInfoMenu(); break;
+            case 6: showJoinRequests(); break;
+            case 7: showWeeklyScheduleInfo(); break;
+            case 8: adminCoachMenu(users[userIndex].id); break;
+            case 0: saveAll(); return;
+            default: cout << "Invalid choice.\n";
+            }
+        }
+    }
+
+    void adminUsersMenu() {
+        while (true) {
+            cout << "\n=== USERS ===\n";
+            cout << "1. Show all users\n";
+            cout << "2. Add coach\n";
+            cout << "3. Delete user\n";
+            cout << "4. Remove dancer from group\n";
+            cout << "0. Back\n";
+            cout << "Choose: ";
+
+            int choice = readInt();
+
             switch (choice) {
             case 1: showAllUsers(); break;
             case 2: addUserInteractive(ROLE_COACH); break;
-            case 3: addGroupInteractive(); break;
-            case 4: assignDancerToGroupInteractive(); break;
-            case 5: addSessionInteractive(); break;
-            case 6: addEventInteractive(); break;
-            case 7: assignUserToEventInteractive(); break;
-            case 8: activateMembershipInteractive(); break;
-            case 9: showAllMemberships(); break;
-            case 10: showAllSessions(); break;
-            case 11: showInfoSection(); break;
-            case 12: editStudioInfo(); break;
-            case 13: showJoinRequests(); break;
-            case 0: saveAll(); return;
+            case 3: deleteUserInteractive(); break;
+            case 4: removeUserFromGroupInteractive(); break;
+            case 0: return;
+            default: cout << "Invalid choice.\n";
+            }
+        }
+    }
+
+    void adminGroupsMenu() {
+        while (true) {
+            cout << "\n=== GROUPS ===\n";
+            cout << "1. Add group\n";
+            cout << "2. Assign dancer to group\n";
+            cout << "0. Back\n";
+            cout << "Choose: ";
+
+            int choice = readInt();
+
+            switch (choice) {
+            case 1: addGroupInteractive(); break;
+            case 2: assignDancerToGroupInteractive(); break;
+            case 0: return;
+            default: cout << "Invalid choice.\n";
+            }
+        }
+    }
+
+    void adminSessionsEventsMenu() {
+        while (true) {
+            cout << "\n=== SESSIONS AND EVENTS ===\n";
+            cout << "1. Add session\n";
+            cout << "2. Show all sessions\n";
+            cout << "3. Add event\n";
+            cout << "4. Assign user to event\n";
+            cout << "0. Back\n";
+            cout << "Choose: ";
+
+            int choice = readInt();
+
+            switch (choice) {
+            case 1: addSessionInteractive(); break;
+            case 2: showAllSessions(); break;
+            case 3: addEventInteractive(); break;
+            case 4: assignUserToEventInteractive(); break;
+            case 0: return;
+            default: cout << "Invalid choice.\n";
+            }
+        }
+    }
+
+    void adminMembershipsMenu() {
+        while (true) {
+            cout << "\n=== MEMBERSHIPS ===\n";
+            cout << "1. Activate membership\n";
+            cout << "2. Show all memberships\n";
+            cout << "0. Back\n";
+            cout << "Choose: ";
+
+            int choice = readInt();
+
+            switch (choice) {
+            case 1: activateMembershipInteractive(); break;
+            case 2: showAllMemberships(); break;
+            case 0: return;
+            default: cout << "Invalid choice.\n";
+            }
+        }
+    }
+
+
+    void adminStudioInfoMenu() {
+        while (true) {
+            cout << "\n=== STUDIO INFO ===\n";
+            cout << "1. Show studio info\n";
+            cout << "2. Edit studio info\n";
+            cout << "0. Back\n";
+            cout << "Choose: ";
+
+            int choice = readInt();
+
+            switch (choice) {
+            case 1: showInfoSection(); break;
+            case 2: editStudioInfo(); break;
+            case 0: return;
+            default: cout << "Invalid choice.\n";
+            }
+        }
+    }
+
+    void adminCoachMenu(int adminUserId) {
+        while (true) {
+            cout << "\n=== COACH ACTIONS ===\n";
+            cout << "1. My sessions\n";
+            cout << "2. Cancel session\n";
+            cout << "3. Reschedule session\n";
+            cout << "4. View absence reasons\n";
+            cout << "0. Back\n";
+            cout << "Choose: ";
+
+            int choice = readInt();
+
+            switch (choice) {
+            case 1: showCoachSessions(adminUserId); break;
+            case 2: cancelCoachSession(adminUserId); break;
+            case 3: rescheduleCoachSession(adminUserId); break;
+            case 4: showCoachAbsences(adminUserId); break;
+            case 0: return;
             default: cout << "Invalid choice.\n";
             }
         }
@@ -1057,18 +1269,28 @@ private:
         cout << left
             << setw(5) << "ID"
             << setw(22) << "Name"
-            << setw(28) << "Phone"
+            << setw(20) << "Phone"
             << setw(12) << "Role"
+            << setw(12) << "Status"
             << "Instagram\n";
-        cout << string(95, '-') << "\n";
+
+        cout << string(85, '-') << "\n";
 
         for (size_t i = 0; i < users.size(); ++i) {
+            string statusStr;
+
+            if (users[i].status == 0) statusStr = "Pending";
+            else if (users[i].status == 1) statusStr = "Approved";
+            else if (users[i].status == 2) statusStr = "Rejected";
+
             cout << left
                 << setw(5) << users[i].id
                 << setw(22) << users[i].name
-                << setw(28) << users[i].phone
+                << setw(20) << users[i].phone
                 << setw(12) << roleToString(users[i].role)
-                << users[i].instagram << "\n";
+                << setw(12) << statusStr
+                << users[i].instagram
+                << "\n";
         }
     }
 
@@ -1078,32 +1300,33 @@ private:
             return;
         }
 
-        vector<Session> copy = sessions;
-        sort(copy.begin(), copy.end(), compareSessionDateTime);
-
         cout << left
             << setw(5) << "ID"
             << setw(28) << "Group"
-            << setw(12) << "Date"
+            << setw(12) << "Day"
             << setw(8) << "Time"
             << setw(10) << "Duration"
+            << setw(12) << "Recurring"
             << setw(12) << "Status"
             << "Note\n";
-        cout << string(95, '-') << "\n";
+        cout << string(105, '-') << "\n";
 
-        for (size_t i = 0; i < copy.size(); ++i) {
-            int gi = findGroupIndexById(copy[i].groupId);
+        for (size_t i = 0; i < sessions.size(); ++i) {
+            int gi = findGroupIndexById(sessions[i].groupId);
             string groupName = (gi == -1) ? "Unknown" : groups[gi].name;
+
             cout << left
-                << setw(5) << copy[i].id
+                << setw(5) << sessions[i].id
                 << setw(28) << groupName
-                << setw(12) << copy[i].date
-                << setw(8) << copy[i].time
-                << setw(10) << copy[i].durationMin
-                << setw(12) << (copy[i].cancelled ? "Cancelled" : "Active")
-                << copy[i].note << "\n";
+                << setw(12) << dayOfWeekToString(sessions[i].dayOfWeek)
+                << setw(8) << sessions[i].time
+                << setw(10) << sessions[i].durationMin
+                << setw(12) << (sessions[i].recurring ? "Yes" : "No")
+                << setw(12) << (sessions[i].cancelled ? "Cancelled" : "Active")
+                << sessions[i].note << "\n";
         }
     }
+
     void showUserGroups(int userId) const {
         int ui = findUserIndexById(userId);
         if (ui == -1) return;
@@ -1131,6 +1354,7 @@ private:
 
     void showCoachSessions(int coachUserId) {
         vector<Session> ownSessions;
+
         for (size_t i = 0; i < sessions.size(); ++i) {
             if (coachOwnsSession(coachUserId, sessions[i].id)) {
                 ownSessions.push_back(sessions[i]);
@@ -1142,26 +1366,27 @@ private:
             return;
         }
 
-        sort(ownSessions.begin(), ownSessions.end(), compareSessionDateTime);
-
         cout << left
             << setw(5) << "ID"
             << setw(28) << "Group"
-            << setw(12) << "Date"
+            << setw(12) << "Day"
             << setw(8) << "Time"
             << setw(10) << "Duration"
+            << setw(12) << "Recurring"
             << setw(12) << "Status"
             << "Note\n";
-        cout << string(95, '-') << "\n";
+        cout << string(105, '-') << "\n";
 
         for (size_t i = 0; i < ownSessions.size(); ++i) {
             int gi = findGroupIndexById(ownSessions[i].groupId);
+
             cout << left
                 << setw(5) << ownSessions[i].id
                 << setw(28) << (gi == -1 ? "Unknown" : groups[gi].name)
-                << setw(12) << ownSessions[i].date
+                << setw(12) << dayOfWeekToString(ownSessions[i].dayOfWeek)
                 << setw(8) << ownSessions[i].time
                 << setw(10) << ownSessions[i].durationMin
+                << setw(12) << (ownSessions[i].recurring ? "Yes" : "No")
                 << setw(12) << (ownSessions[i].cancelled ? "Cancelled" : "Active")
                 << ownSessions[i].note << "\n";
         }
@@ -1255,11 +1480,21 @@ private:
     }
 
     void showInfoSection() const {
-        cout << "\n=== STUDIO INFO LINKS ===\n";
+        cout << "\n=== STUDIO INFO ===\n";
         cout << "Studio description:\n" << studioInfo.studioDescription << "\n\n";
         cout << "Rules:\n" << studioInfo.rules << "\n\n";
         cout << "Studio Instagram: " << studioInfo.studioInstagram << "\n";
         cout << "Studio TikTok: " << studioInfo.studioTikTok << "\n\n";
+
+        cout << "=== STYLES ===\n";
+        cout << "- " << studioInfo.contemporaryInfo << "\n";
+        cout << "- " << studioInfo.heelsInfo << "\n";
+        cout << "- " << studioInfo.jazzFunkInfo << "\n";
+        cout << "- " << studioInfo.jazzOpenInfo << "\n";
+        cout << "- " << studioInfo.ladyStyleInfo << "\n";
+        cout << "- " << studioInfo.showGroupInfo << "\n";
+        cout << "- " << studioInfo.stretchingInfo << "\n";
+        cout << "- " << studioInfo.softStretchingInfo << "\n\n";
 
         cout << "Coach and admin Instagram links:\n";
         bool foundLinks = false;
@@ -1293,6 +1528,182 @@ private:
                 cout << i + 1 << ". " << studioInfo.extraInfoLinks[i] << "\n";
             }
         }
+    }
+
+    void showLevelDescriptions() const {
+        cout << "\n=== GROUP LEVELS ===\n";
+        cout << "OPEN - open groups for dancers of any level.\n";
+        cout << "BEGINNER (BEG) - for beginner dancers (0-2 years of experience).\n";
+        cout << "INTERMEDIATE (INT) - for dancers with experience (2+ years of experience).\n";
+        cout << "ADVANCED (ADV) - closed groups for stronger and more experienced dancers.\n";
+        cout << "SHOW GROUP - closed group for dancers selected by the studio.\n";
+        cout << "----------------------------------------\n";
+    }
+
+    void showFullStylesInfo() {
+        cout << "\n========== STYLES ==========\n";
+
+        // CONTEMP
+        cout << "\n--- CONTEMPORARY (12+) ---\n";
+        cout << "Flow, softness, control.\n";
+        cout << "Balance between freedom and discipline.\n";
+
+        // HEELS
+        cout << "\n--- HEELS (16+) ---\n";
+        cout << "Confidence, femininity, control.\n";
+        cout << "Balance, posture, presentation.\n";
+
+        // JAZZ FUNK
+        cout << "\n--- JAZZ FUNK (12+) ---\n";
+        cout << "Energy + precision.\n";
+        cout << "Sharp, musical, expressive.\n";
+
+        // JAZZ
+        cout << "\n--- JAZZ (14+) ---\n";
+        cout << "Freedom inside structure.\n";
+        cout << "Technique, jumps, turns, musicality.\n";
+
+        // LADY STYLE
+        cout << "\n--- LADY STYLE (30+) ---\n";
+        cout << "Mix of styles with feminine energy.\n";
+        cout << "Expression, сценичность.\n";
+
+        // SHOW GROUP
+        cout << "\n--- SHOW GROUP (15+) ---\n";
+        cout << "High level, competitions, performances.\n";
+        cout << "Only after casting.\n";
+
+        cout << "\n";
+    }
+
+    void showAvailableGroupsForRequests() const {
+        cout << "\n========== AVAILABLE GROUPS ==========\n";
+        cout << "1. Contemporary Beginner (12+)\n";
+        cout << "2. Contemporary Intermediate (12+)\n";
+        cout << "3. Contemporary Adults (25+)\n";
+        cout << "4. Heels Beginner (16+)\n";
+        cout << "5. Heels Advanced (16+)\n";
+        cout << "6. Jazz Funk Beginner (12+)\n";
+        cout << "7. Jazz Funk Intermediate (12+)\n";
+        cout << "8. Jazz Open (14+)\n";
+        cout << "9. Lady Style Intermediate (30+)\n";
+        cout << "10. Show Group (15+, casting)\n";
+        cout << "11. Stretching & Acrobatics\n";
+        cout << "12. Soft Stretching\n";
+        cout << "\n";
+    }
+
+    void submitJoinRequest(int userIndex) {
+        cout << "\n=== JOIN REQUEST ===\n";
+
+        // Описание уровней
+        showLevelDescriptions();
+
+        // Спросить, хочет ли посмотреть стили
+        cout << "Do you want to view full style information? (y/n): ";
+        char choice;
+        cin >> choice;
+        cin.ignore();
+
+        if (choice == 'y' || choice == 'Y') {
+            showFullStylesInfo();
+        }
+
+        // Показать группы
+        showAvailableGroupsForRequests();
+
+        cout << "How many groups do you want to apply for? ";
+        int count = readInt();
+
+        if (count <= 0) {
+            cout << "Invalid number.\n";
+            return;
+        }
+
+        vector<int> selectedGroups;
+
+        for (int i = 0; i < count; ++i) {
+            cout << "Enter group number: ";
+            int groupId = readInt();
+
+            if (groupId < 1 || groupId > groups.size()) {
+                cout << "Invalid group ID.\n";
+                --i;
+                continue;
+            }
+
+            selectedGroups.push_back(groupId);
+        }
+
+        // creating a request
+        JoinRequest req;
+        req.id = static_cast<int>(joinRequests.size()) + 1;
+
+        // users info
+        strcpy_s(req.firstName, sizeof(req.firstName), users[userIndex].name);
+        strcpy_s(req.lastName, sizeof(req.lastName), "");
+        req.age = 0;
+
+        strcpy_s(req.experience, sizeof(req.experience), "");
+        strcpy_s(req.parentPhone, sizeof(req.parentPhone), users[userIndex].phone);
+
+        req.groupCount = static_cast<int>(selectedGroups.size());
+
+        for (int i = 0; i < req.groupCount; ++i) {
+            req.groupIds[i] = selectedGroups[i];
+        }
+
+        req.processed = false;
+
+        joinRequests.push_back(req);
+
+        cout << "Request submitted successfully! Waiting for admin approval.\n";
+    }
+
+    void showWeeklyScheduleInfo() const {
+        cout << "\n========== WEEKLY SCHEDULE ==========\n";
+
+        cout << "\nMONDAY\n";
+        cout << "17:00-18:00 | Extra Trainings\n";
+        cout << "18:00-19:00 | Contemporary Technique\n";
+        cout << "19:00-20:00 | Heels Beginner\n";
+        cout << "20:00-21:30 | Show Group\n";
+
+        cout << "\nTUESDAY\n";
+        cout << "17:00-18:00 | Extra Trainings\n";
+        cout << "18:00-19:00 | Jazz Open\n";
+        cout << "19:00-20:00 | Lady Style Intermediate\n";
+        cout << "20:00-21:00 | Heels Advanced\n";
+
+        cout << "\nWEDNESDAY\n";
+        cout << "17:00-18:00 | Contemporary Beginner\n";
+        cout << "18:00-19:00 | Contemporary Intermediate\n";
+        cout << "19:00-20:00 | Advanced Technique\n";
+        cout << "20:00-21:30 | Show Group\n";
+
+        cout << "\nTHURSDAY\n";
+        cout << "17:00-18:00 | Jazz Funk Beginner\n";
+        cout << "18:00-19:00 | Jazz Funk Intermediate\n";
+        cout << "19:00-20:00 | Lady Style Intermediate\n";
+        cout << "20:00-21:00 | Heels Advanced\n";
+
+        cout << "\nFRIDAY\n";
+        cout << "17:00-18:00 | Stretching & Acrobatics\n";
+        cout << "18:00-19:00 | Show Group\n";
+        cout << "19:00-20:00 | Jazz Open\n";
+        cout << "20:00-21:00 | Heels Beginner\n";
+
+        cout << "\nSATURDAY\n";
+        cout << "10:00-11:00 | Soft Stretching\n";
+        cout << "11:00-12:00 | Stretching & Acrobatics\n";
+        cout << "12:00-13:00 | Jazz Funk Beginner\n";
+        cout << "13:00-14:00 | Jazz Funk Intermediate\n";
+
+        cout << "\nSUNDAY\n";
+        cout << "11:00-12:00 | Contemporary Beginner\n";
+        cout << "12:00-13:00 | Contemporary Intermediate\n";
+
+        cout << "\n";
     }
 
     // ---------- membership ----------
@@ -1363,8 +1774,7 @@ private:
             return;
         }
 
-        cout << "Enter purchase date (YYYYMMDD): ";
-        int purchaseDate = readInt();
+        int purchaseDate = getCurrentDate();
 
         Membership m;
         m.id = nextMembershipId();
@@ -1498,10 +1908,9 @@ private:
         }
 
         string reason = readLine("Enter reason for absence: ");
-        cout << "Enter submission date (YYYYMMDD): ";
-        int currentDate = readInt();
-        cout << "Enter submission time (HHMM): ";
-        int currentTime = readInt();
+
+        int currentDate = getCurrentDate();
+        int currentTime = getCurrentTimeHHMM();
 
         time_t sessionTime = toTimeValue(sessions[si].date, sessions[si].time);
         time_t submitTime = toTimeValue(currentDate, currentTime);
@@ -1517,7 +1926,7 @@ private:
         a.deducted = false;
 
         if (a.late) {
-            Membership* m = findActiveMembershipForUser(userId, sessions[si].date);
+            Membership* m = findActiveMembershipForUser(userId, currentDate);
             if (m != NULL && m->classesTotal != 0) {
                 m->classesUsed++;
                 a.deducted = true;
@@ -1606,13 +2015,16 @@ private:
             return;
         }
 
-        cout << "Enter new date (YYYYMMDD): ";
-        sessions[si].date = readInt();
+        cout << "Enter new day of week (1 Monday ... 7 Sunday): ";
+        sessions[si].dayOfWeek = readInt();
+
         cout << "Enter new time (HHMM): ";
         sessions[si].time = readInt();
+
         string note = readLine("Enter note for reschedule: ");
         copyText(sessions[si].note, MAX_TEXT, note);
         sessions[si].cancelled = false;
+
         cout << "Session rescheduled.\n";
     }
 
@@ -1647,22 +2059,172 @@ private:
 
         if (!found) {
             cout << "No pending join requests.\n";
-        }
-    }
-
-    void addUserInteractive(int role) {
-        string name = readLine("Name: ");
-        string phone = readLine("Phone: ");
-        string password = readLine("Password: ");
-        string instagram = readLine("Instagram link (or leave empty): ");
-
-        if (findUserIdByPhone(phone) != -1) {
-            cout << "A user with this phone already exists.\n";
             return;
         }
 
-        int id = addUserRecord(name, phone, password, role, instagram);
-        cout << "User added with ID " << id << ".\n";
+        cout << "\nEnter request ID to process (0 to back): ";
+        int requestId = readInt();
+
+        if (requestId == 0) return;
+
+        int requestIndex = -1;
+        for (size_t i = 0; i < joinRequests.size(); ++i) {
+            if (joinRequests[i].id == requestId && !joinRequests[i].processed) {
+                requestIndex = static_cast<int>(i);
+                break;
+            }
+        }
+
+        if (requestIndex == -1) {
+            cout << "Request not found.\n";
+            return;
+        }
+
+        cout << "1. Approve\n";
+        cout << "2. Reject\n";
+        cout << "Choose: ";
+        int action = readInt();
+
+        if (action == 1) {
+            JoinRequest& r = joinRequests[requestIndex];
+
+            int userId = findUserIdByPhone(r.phone);
+            int ui = findUserIndexById(userId);
+
+            if (ui == -1) {
+                cout << "User for this request not found.\n";
+                return;
+            }
+
+            users[ui].status = 1;
+
+            cout << "\nRequested groups:\n";
+            for (int j = 0; j < r.groupCount; ++j) {
+                int gi = findGroupIndexById(r.groupIds[j]);
+                if (gi != -1) {
+                    cout << groups[gi].id << ". " << groups[gi].name << "\n";
+                }
+            }
+
+            cout << "How many groups do you approve for this dancer? ";
+            int approvedCount = readInt();
+
+            for (int j = 0; j < approvedCount; ++j) {
+                cout << "Enter approved group ID: ";
+                int groupId = readInt();
+                assignUserToGroup(users[ui].id, groupId);
+            }
+
+            r.processed = true;
+            cout << "Request approved.\n";
+        }
+        else if (action == 2) {
+            JoinRequest& r = joinRequests[requestIndex];
+
+            int userId = findUserIdByPhone(r.phone);
+            int ui = findUserIndexById(userId);
+
+            if (ui != -1) {
+                users[ui].status = 2;
+            }
+
+            r.processed = true;
+            cout << "Request rejected.\n";
+        }
+        else {
+            cout << "Invalid action.\n";
+        }
+    }
+        void addUserInteractive(int role) {
+            string name = readLine("Name: ");
+            string phone = readLine("Phone: ");
+            string password = readLine("Password: ");
+            string instagram = readLine("Instagram link (or leave empty): ");
+
+            if (findUserIdByPhone(phone) != -1) {
+                cout << "A user with this phone already exists.\n";
+                return;
+            }
+
+            int id = addUserRecord(name, phone, password, role, instagram);
+            cout << "User added with ID " << id << ".\n";
+        }
+
+        void deleteUserInteractive() {
+            showAllUsers();
+
+            cout << "Enter user ID to delete (0 - cancel): ";
+            int id = readInt();
+
+            if (id == 0) return;
+
+            for (size_t i = 0; i < users.size(); ++i) {
+                if (users[i].id == id) {
+
+                    if (users[i].role == ROLE_ADMIN) {
+                        cout << "Cannot delete admin.\n";
+                        return;
+                    }
+
+                    users.erase(users.begin() + i);
+
+                    cout << "User deleted.\n";
+                    return;
+                }
+            }
+
+            cout << "User not found.\n";
+        }
+    
+
+    void removeUserFromGroupInteractive() {
+        showUsersByRole(ROLE_DANCER);
+        cout << "Enter dancer user ID: ";
+        int userId = readInt();
+
+        int ui = findUserIndexById(userId);
+        if (ui == -1 || users[ui].role != ROLE_DANCER) {
+            cout << "Dancer not found.\n";
+            return;
+        }
+
+        if (users[ui].groupCount == 0) {
+            cout << "This dancer has no groups.\n";
+            return;
+        }
+
+        cout << "\nDancer groups:\n";
+        for (int i = 0; i < users[ui].groupCount; ++i) {
+            int gi = findGroupIndexById(users[ui].groupIds[i]);
+            if (gi != -1) {
+                cout << groups[gi].id << ". " << groups[gi].name << "\n";
+            }
+        }
+
+        cout << "Enter group ID to remove: ";
+        int groupId = readInt();
+
+        int pos = -1;
+        for (int i = 0; i < users[ui].groupCount; ++i) {
+            if (users[ui].groupIds[i] == groupId) {
+                pos = i;
+                break;
+            }
+        }
+
+        if (pos == -1) {
+            cout << "This dancer is not in that group.\n";
+            return;
+        }
+
+        for (int i = pos; i < users[ui].groupCount - 1; ++i) {
+            users[ui].groupIds[i] = users[ui].groupIds[i + 1];
+        }
+
+        users[ui].groupIds[users[ui].groupCount - 1] = 0;
+        users[ui].groupCount--;
+
+        cout << "Dancer removed from group.\n";
     }
 
     void addGroupInteractive() {
@@ -1684,6 +2246,37 @@ private:
 
         int id = addGroupRecord(name, coachUserId, capacity, description, rules);
         cout << "Group added with ID " << id << ".\n";
+    }
+
+    void addSessionInteractive() {
+        showGroups();
+        cout << "Group ID: ";
+        int groupId = readInt();
+
+        if (findGroupIndexById(groupId) == -1) {
+            cout << "Group not found.\n";
+            return;
+        }
+
+        cout << "Day of week (1 Monday ... 7 Sunday): ";
+        int dayOfWeek = readInt();
+
+        if (dayOfWeek < 1 || dayOfWeek > 7) {
+            cout << "Invalid day of week.\n";
+            return;
+        }
+
+        cout << "Time (HHMM): ";
+        int time = readInt();
+
+        cout << "Duration in minutes: ";
+        int duration = readInt();
+
+        bool recurring = readYesNo("Is this a weekly recurring session?");
+        string note = readLine("Note: ");
+
+        int id = addSessionRecord(groupId, dayOfWeek, time, duration, note, recurring);
+        cout << "Session added with ID " << id << ".\n";
     }
 
     void assignDancerToGroupInteractive() {
@@ -1714,26 +2307,22 @@ private:
         cout << "Dancer assigned to group.\n";
     }
 
-    void addSessionInteractive() {
-        showGroups();
-        cout << "Group ID: ";
-        int groupId = readInt();
-        if (findGroupIndexById(groupId) == -1) {
-            cout << "Group not found.\n";
+    void showEvents() const {
+        if (events.empty()) {
+            cout << "No events found.\n";
             return;
         }
 
-        cout << "Date (YYYYMMDD): ";
-        int date = readInt();
-        cout << "Time (HHMM): ";
-        int time = readInt();
-        cout << "Duration in minutes: ";
-        int duration = readInt();
-        string note = readLine("Note: ");
-
-        int id = addSessionRecord(groupId, date, time, duration, note);
-        cout << "Session added with ID " << id << ".\n";
+        for (size_t i = 0; i < events.size(); ++i) {
+            cout << "Event ID: " << events[i].id
+                << " | " << eventTypeToString(events[i].type)
+                << " | Title: " << events[i].title
+                << " | Date: " << events[i].date
+                << " | Time: " << events[i].time
+                << "\n";
+        }
     }
+
     void addEventInteractive() {
         cout << "Type (1-Competition, 2-Concert, 3-General): ";
         int type = readInt();
@@ -1774,7 +2363,6 @@ private:
         cout << "User assigned to event.\n";
     }
 
-    // ---------- simple lists ----------
     void showGroups() const {
         if (groups.empty()) {
             cout << "No groups found.\n";
@@ -1795,22 +2383,6 @@ private:
                 << setw(28) << groups[i].name
                 << setw(8) << groups[i].coachUserId
                 << setw(10) << groups[i].capacity
-                << "\n";
-        }
-    }
-
-    void showEvents() const {
-        if (events.empty()) {
-            cout << "No events found.\n";
-            return;
-        }
-
-        for (size_t i = 0; i < events.size(); ++i) {
-            cout << "Event ID: " << events[i].id
-                << " | " << eventTypeToString(events[i].type)
-                << " | Title: " << events[i].title
-                << " | Date: " << events[i].date
-                << " | Time: " << events[i].time
                 << "\n";
         }
     }
@@ -1842,8 +2414,16 @@ private:
             cout << "2. Edit studio rules\n";
             cout << "3. Edit studio Instagram link\n";
             cout << "4. Edit studio TikTok link\n";
-            cout << "5. Add competition photo link\n";
-            cout << "6. Add extra info link\n";
+            cout << "5. Edit Contemporary info\n";
+            cout << "6. Edit Heels info\n";
+            cout << "7. Edit Jazz Funk info\n";
+            cout << "8. Edit Jazz Open info\n";
+            cout << "9. Edit Lady Style info\n";
+            cout << "10. Edit Show Group info\n";
+            cout << "11. Edit Stretching & Acrobatics info\n";
+            cout << "12. Edit Soft Stretching info\n";
+            cout << "13. Add competition photo link\n";
+            cout << "14. Add extra info link\n";
             cout << "0. Back\n";
             cout << "Choose: ";
 
@@ -1852,17 +2432,13 @@ private:
             if (choice == 0) return;
 
             if (choice == 1) {
-                cout << "\nCurrent studio description:\n";
-                cout << studioInfo.studioDescription << "\n\n";
-
+                cout << "\nCurrent studio description:\n" << studioInfo.studioDescription << "\n\n";
                 string text = readLine("New studio description: ");
                 copyText(studioInfo.studioDescription, MAX_TEXT, text);
                 cout << "Studio description updated.\n";
             }
             else if (choice == 2) {
-                cout << "\nCurrent studio rules:\n";
-                cout << studioInfo.rules << "\n\n";
-
+                cout << "\nCurrent studio rules:\n" << studioInfo.rules << "\n\n";
                 string text = readLine("New studio rules: ");
                 copyText(studioInfo.rules, MAX_TEXT, text);
                 cout << "Studio rules updated.\n";
@@ -1878,6 +2454,54 @@ private:
                 cout << "Studio TikTok updated.\n";
             }
             else if (choice == 5) {
+                cout << "\nCurrent Contemporary info:\n" << studioInfo.contemporaryInfo << "\n\n";
+                string text = readLine("New Contemporary info: ");
+                copyText(studioInfo.contemporaryInfo, MAX_TEXT, text);
+                cout << "Contemporary info updated.\n";
+            }
+            else if (choice == 6) {
+                cout << "\nCurrent Heels info:\n" << studioInfo.heelsInfo << "\n\n";
+                string text = readLine("New Heels info: ");
+                copyText(studioInfo.heelsInfo, MAX_TEXT, text);
+                cout << "Heels info updated.\n";
+            }
+            else if (choice == 7) {
+                cout << "\nCurrent Jazz Funk info:\n" << studioInfo.jazzFunkInfo << "\n\n";
+                string text = readLine("New Jazz Funk info: ");
+                copyText(studioInfo.jazzFunkInfo, MAX_TEXT, text);
+                cout << "Jazz Funk info updated.\n";
+            }
+            else if (choice == 8) {
+                cout << "\nCurrent Jazz Open info:\n" << studioInfo.jazzOpenInfo << "\n\n";
+                string text = readLine("New Jazz Open info: ");
+                copyText(studioInfo.jazzOpenInfo, MAX_TEXT, text);
+                cout << "Jazz Open info updated.\n";
+            }
+            else if (choice == 9) {
+                cout << "\nCurrent Lady Style info:\n" << studioInfo.ladyStyleInfo << "\n\n";
+                string text = readLine("New Lady Style info: ");
+                copyText(studioInfo.ladyStyleInfo, MAX_TEXT, text);
+                cout << "Lady Style info updated.\n";
+            }
+            else if (choice == 10) {
+                cout << "\nCurrent Show Group info:\n" << studioInfo.showGroupInfo << "\n\n";
+                string text = readLine("New Show Group info: ");
+                copyText(studioInfo.showGroupInfo, MAX_TEXT, text);
+                cout << "Show Group info updated.\n";
+            }
+            else if (choice == 11) {
+                cout << "\nCurrent Stretching & Acrobatics info:\n" << studioInfo.stretchingInfo << "\n\n";
+                string text = readLine("New Stretching & Acrobatics info: ");
+                copyText(studioInfo.stretchingInfo, MAX_TEXT, text);
+                cout << "Stretching & Acrobatics info updated.\n";
+            }
+            else if (choice == 12) {
+                cout << "\nCurrent Soft Stretching info:\n" << studioInfo.softStretchingInfo << "\n\n";
+                string text = readLine("New Soft Stretching info: ");
+                copyText(studioInfo.softStretchingInfo, MAX_TEXT, text);
+                cout << "Soft Stretching info updated.\n";
+            }
+            else if (choice == 13) {
                 if (studioInfo.competitionPhotoCount >= MAX_INFO_ITEMS) {
                     cout << "Competition photo link list is full.\n";
                 }
@@ -1888,7 +2512,7 @@ private:
                     cout << "Competition photo link added.\n";
                 }
             }
-            else if (choice == 6) {
+            else if (choice == 14) {
                 if (studioInfo.extraInfoCount >= MAX_INFO_ITEMS) {
                     cout << "Extra info link list is full.\n";
                 }
@@ -1904,7 +2528,9 @@ private:
             }
         }
     }
+
 };
+
 
 int main() {
     DanceStudioApp app;
